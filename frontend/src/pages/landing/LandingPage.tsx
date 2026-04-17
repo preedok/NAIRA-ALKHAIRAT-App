@@ -44,7 +44,7 @@ const LandingPage = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-10">
-            {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji', 'Testimoni', 'FAQ'].map((item) => (
+            {['Home', 'Tentang Kami', 'Layanan', 'Paket Umroh & Haji','Testimoni', 'Galeri', 'FAQ'].map((item) => (
               <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`} className="text-sm font-medium text-zinc-400 hover:text-[#C9A04B] transition-colors">
                 {item}
               </a>
@@ -244,7 +244,7 @@ const LandingPage = () => {
               {
                 title: 'Umroh Reguler (12 Hari)',
                 price: '28.5',
-                img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=2070&auto=format&fit=crop', 
+                img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=2070&auto=format&fit=crop',
                 tag: 'Best Seller',
                 hotel: 'Bintang 4',
                 date: 'Keberangkatan: Okt - Des 2025'
@@ -337,6 +337,72 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* ─── GALLERY SECTION ────────────────────────────────────────────── */}
+      <section id="galeri" className="py-24 bg-[#0A0A0A] text-left">
+        <div className="container mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 gap-6">
+            <div className="max-w-2xl">
+              <h2 className="text-5xl font-bold mb-6">Momen Suci <span style={{ color: COLORS.accent }}>Jamaah Kami</span></h2>
+              <p className="text-zinc-400 text-lg">Dokumentasi perjalanan ibadah dan kegiatan para jamaah Nail Al-Khairat selama di Tanah Suci.</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-bold text-white">Ikuti Perjalanan Kami</div>
+                <div className="text-xs text-zinc-500 text-zinc-400">@nailalkhairat.id</div>
+              </div>
+              <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center text-[#C9A04B]">
+                <Instagram size={20} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bento Grid Gallery */}
+          <div className="grid grid-cols-2 md:grid-cols-4 md:grid-rows-2 gap-4 h-[600 md:h-[800px]">
+            {/* Main Large Image */}
+            <div className="col-span-2 row-span-2 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1610448721566-47369c768e70?q=80&w=1000&auto=format&fit=crop"
+                alt="Jamaah at Kaaba"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-8">
+                <div>
+                  <p className="text-white font-bold text-xl">Thawaf Wadah</p>
+                  <p className="text-zinc-300 text-sm">Masjidil Haram, Makkah</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid Item 2 */}
+            <div className="col-span-2 row-span-1 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=1000&auto=format&fit=crop"
+                alt="Nabawi Mosque"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors duration-500" />
+            </div>
+
+            {/* Grid Item 3 */}
+            <div className="col-span-1 row-span-1 relative group overflow-hidden rounded-[40px]">
+              <img
+                src="https://images.unsplash.com/photo-1610448721566-47369c768e70?q=80&w=1000&auto=format&fit=crop"
+                alt="Pilgrim Praying"
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+              />
+            </div>
+
+            {/* Grid Item 4 (CTA / Info) */}
+            <div className="col-span-1 row-span-1 bg-zinc-900 border border-white/5 rounded-[40px] flex flex-col items-center justify-center text-center p-6 hover:border-[#C9A04B]/50 transition-colors">
+              <div className="w-12 h-12 rounded-full bg-[#C9A04B]/10 flex items-center justify-center mb-4">
+                <Star className="text-[#C9A04B]" size={24} fill="#C9A04B" />
+              </div>
+              <h4 className="text-white font-bold text-lg mb-1">500+ Momen</h4>
+              <p className="text-zinc-500 text-xs uppercase tracking-widest font-bold">Telah Terabadikan</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* ─── CTA SECTION ─────────────────────────────────────────────── */}
       <section className="py-24 text-center">
         <div className="container mx-auto px-6">
