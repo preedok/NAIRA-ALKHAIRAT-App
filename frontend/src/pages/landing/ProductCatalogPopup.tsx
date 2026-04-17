@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, CheckCircle, ArrowRight, Sparkles } from 'lucide-react';
+import { X, Calendar, CheckCircle, ArrowRight, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 
 const COLORS = {
@@ -7,101 +7,159 @@ const COLORS = {
   dark: '#18181b',
 };
 
-export const ProductCatalogPopup: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  const promoData = {
+// Data Katalog untuk Carousel
+const CATALOG_ITEMS = [
+  {
+    id: 1,
     title: 'Umroh Ramadhan Premium 1446H',
     price: '42.5',
-    img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=1974&auto=format&fit=crop',
+    img: 'https://images.unsplash.com/photo-1591604129939-f1efa4d9f7fa?q=80&w=2070&auto=format&fit=crop',
     tag: 'Limited Slot',
     hotel: 'Bintang 5 (Front Row)',
     date: 'Keberangkatan: Maret 2025'
-  };
+  },
+  {
+    id: 2,
+    title: 'Umroh Plus Turki & Cappadocia',
+    price: '38.9',
+    img: 'https://images.unsplash.com/photo-1527838832700-5059252407fa?q=80&w=1962&auto=format&fit=crop',
+    tag: 'Favorit',
+    hotel: 'Bintang 5 Combo',
+    date: 'Keberangkatan: Nov 2025'
+  },
+  {
+    id: 3,
+    title: 'Haji Dakhili Premium VIP',
+    price: '250',
+    img: 'https://images.unsplash.com/photo-1564769625905-50e93615e769?q=80&w=1974&auto=format&fit=crop',
+    tag: 'VIP Access',
+    hotel: 'Masyair VIP Service',
+    date: 'Keberangkatan: Zulkaidah 1446H'
+  }
+];
+
+export const ProductCatalogPopup: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsOpen(true);
-    }, 1500);
+    const timer = setTimeout(() => setIsOpen(true), 1500);
     return () => clearTimeout(timer);
   }, []);
 
+  const nextSlide = () => {
+    setCurrentIndex((prev) => (prev === CATALOG_ITEMS.length - 1 ? 0 : prev + 1));
+  };
+
+  const prevSlide = () => {
+    setCurrentIndex((prev) => (prev === 0 ? CATALOG_ITEMS.length - 1 : prev - 1));
+  };
+
+  const currentData = CATALOG_ITEMS[currentIndex];
+
   return (
     <Modal open={isOpen} onClose={() => setIsOpen(false)}>
-      {/* Container utama: Lebar disesuaikan untuk mobile (w-[92%]) dan desktop (max-w-lg) */}
-      <div className="relative w-[92%] sm:w-full max-w-lg bg-zinc-900 border border-white/10 rounded-[30px] md:rounded-[40px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-500 text-white mx-auto">
+      <div className="relative w-[92%] sm:w-full max-w-lg bg-zinc-900 border border-white/10 rounded-[35px] md:rounded-[40px] overflow-hidden shadow-2xl text-white mx-auto transition-all duration-500">
         
-        {/* Tombol Close - Ukuran disesuaikan untuk touch area mobile */}
+        {/* Navigasi Carousel - Tombol Kiri */}
+        <button 
+          onClick={prevSlide}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-[#C9A04B] hover:text-black transition-all"
+        >
+          <ChevronLeft size={20} />
+        </button>
+
+        {/* Navigasi Carousel - Tombol Kanan */}
+        <button 
+          onClick={nextSlide}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-30 w-10 h-10 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-[#C9A04B] hover:text-black transition-all"
+        >
+          <ChevronRight size={20} />
+        </button>
+
+        {/* Tombol Close */}
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 md:top-6 md:right-6 z-30 w-9 h-9 md:w-10 md:h-10 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-[#C9A04B] hover:text-black transition-all"
+          className="absolute top-4 right-4 z-40 w-9 h-9 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center justify-center hover:bg-red-500 transition-all"
         >
           <X size={18} />
         </button>
 
-        {/* Bagian Gambar Produk - Tinggi lebih pendek di mobile */}
-        <div className="relative h-48 md:h-72 overflow-hidden">
-          <img 
-            src={promoData.img} 
-            alt={promoData.title} 
-            className="w-full h-full object-cover transition-transform duration-1000 hover:scale-110" 
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent" />
+        {/* Slide Content */}
+        <div key={currentIndex} className="animate-in fade-in slide-in-from-right-5 duration-500">
           
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 bg-[#C9A04B] text-black px-3 py-1 md:px-4 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 shadow-lg">
-            <Sparkles size={10} className="md:w-3 md:h-3" />
-            {promoData.tag}
-          </div>
-        </div>
-
-        {/* Bagian Konten */}
-        <div className="p-6 md:p-10 -mt-8 md:-mt-10 relative z-10">
-          <div className="flex items-center gap-2 mb-3 md:mb-4 text-[10px] md:text-xs font-bold uppercase tracking-[0.15em]" style={{ color: COLORS.accent }}>
-            <Calendar size={14} /> {promoData.date}
-          </div>
-          
-          <h3 className="text-xl md:text-3xl font-bold mb-4 md:mb-6 tracking-tight leading-tight">
-            {promoData.title}
-          </h3>
-
-          {/* List Fitur - Jarak lebih rapat di mobile */}
-          <div className="flex flex-col gap-3 md:gap-4 mb-8 md:mb-10">
-            <div className="flex items-start gap-3 text-zinc-400 text-xs md:text-sm leading-snug">
-              <div className="w-5 h-5 md:w-6 md:h-6 shrink-0 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                <CheckCircle size={12} className="md:w-3.5 md:h-3.5" style={{ color: COLORS.accent }} />
-              </div>
-              Pesawat Direct Saudi Arabian Airlines
+          {/* Gambar */}
+          <div className="relative h-48 md:h-64 overflow-hidden">
+            <img 
+              src={currentData.img} 
+              alt={currentData.title} 
+              className="w-full h-full object-cover" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent" />
+            
+            <div className="absolute top-4 left-4 bg-[#C9A04B] text-black px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+              <Sparkles size={10} />
+              {currentData.tag}
             </div>
-            <div className="flex items-start gap-3 text-zinc-400 text-xs md:text-sm leading-snug">
-              <div className="w-5 h-5 md:w-6 md:h-6 shrink-0 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
-                <CheckCircle size={12} className="md:w-3.5 md:h-3.5" style={{ color: COLORS.accent }} />
-              </div>
-              Hotel {promoData.hotel}
+
+            {/* Indicator Dots */}
+            <div className="absolute bottom-12 left-0 right-0 flex justify-center gap-1.5">
+              {CATALOG_ITEMS.map((_, idx) => (
+                <div 
+                  key={idx}
+                  className={`h-1 rounded-full transition-all duration-300 ${idx === currentIndex ? 'w-6 bg-[#C9A04B]' : 'w-2 bg-white/30'}`}
+                />
+              ))}
             </div>
           </div>
 
-          {/* Footer & Price - Stack vertical di layar sangat kecil, horizontal di tablet/desktop */}
-          <div className="flex flex-row items-center justify-between pt-6 md:pt-8 border-t border-white/5 gap-4">
-            <div className="shrink-0">
-              <div className="text-[9px] md:text-[10px] text-zinc-500 uppercase font-black tracking-widest mb-0.5 md:mb-1">Mulai Dari</div>
-              <div className="text-2xl md:text-4xl font-black tracking-tighter">
-                Rp {promoData.price}<span className="text-sm md:text-xl font-bold text-zinc-500 ml-0.5">jt</span>
-              </div>
+          {/* Info Konten */}
+          <div className="p-6 md:p-10 -mt-10 relative z-10">
+            <div className="flex items-center gap-2 mb-3 text-[10px] md:text-xs font-bold uppercase tracking-[0.15em]" style={{ color: COLORS.accent }}>
+              <Calendar size={14} /> {currentData.date}
             </div>
             
-            <button 
-              onClick={() => window.location.href = '/catalog'}
-              className="group flex items-center gap-2 md:gap-3 bg-[#C9A04B] hover:bg-white text-black px-4 py-3 md:px-6 md:py-4 rounded-full text-sm md:text-base font-bold transition-all duration-300 shadow-xl shadow-[#C9A04B]/10 active:scale-95"
-            >
-              <span className="hidden xs:inline">Lihat Detail</span>
-              <span className="xs:hidden">Detail</span>
-              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform md:w-5 md:h-5" />
-            </button>
+            <h3 className="text-xl md:text-2xl font-bold mb-4 md:mb-6 leading-tight">
+              {currentData.title}
+            </h3>
+
+            <div className="flex flex-col gap-3 mb-8">
+              <div className="flex items-center gap-3 text-zinc-400 text-xs md:text-sm">
+                <div className="w-5 h-5 shrink-0 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                  <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                </div>
+                Hotel {currentData.hotel}
+              </div>
+              <div className="flex items-center gap-3 text-zinc-400 text-xs md:text-sm">
+                <div className="w-5 h-5 shrink-0 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
+                  <CheckCircle size={12} style={{ color: COLORS.accent }} />
+                </div>
+                Layanan Full Handling & Muthawwif
+              </div>
+            </div>
+
+            {/* Price & Action */}
+            <div className="flex items-center justify-between pt-6 border-t border-white/5">
+              <div>
+                <div className="text-[9px] text-zinc-500 uppercase font-black mb-0.5">Harga Paket</div>
+                <div className="text-2xl md:text-3xl font-black">
+                  Rp {currentData.price}<span className="text-sm font-bold text-zinc-500 ml-0.5">jt</span>
+                </div>
+              </div>
+              
+              <button 
+                onClick={() => window.location.href = '/catalog'}
+                className="group flex items-center gap-2 bg-[#C9A04B] hover:bg-white text-black px-5 py-3 rounded-full text-sm font-bold transition-all shadow-xl shadow-[#C9A04B]/10 active:scale-95"
+              >
+                Detail
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Dekorasi Aksen Emas Bawah */}
-        <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-[#C9A04B] to-transparent opacity-50" />
+        {/* Footer Aksen */}
+        <div className="h-1.5 w-full bg-gradient-to-r from-[#C9A04B]/0 via-[#C9A04B] to-[#C9A04B]/0 opacity-30" />
       </div>
     </Modal>
   );
