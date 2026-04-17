@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import logo from '../../assets/nail-al-khairat-logo.svg'
-
+import { ProductCatalogPopup } from './ProductCatalogPopup';
 /* ─── DESIGN TOKENS ─────────────────────────────────────────────── */
 const COLORS = {
   bg: '#0A0A0A',
@@ -549,6 +549,7 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
+      <ProductCatalogPopup />
     </div>
   );
 };
